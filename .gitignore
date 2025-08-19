@@ -1,0 +1,37 @@
+# Qt/qmake
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.qmlproject.user*
+.qmake.stash
+Makefile
+makefile
+moc_*
+qrc_*
+ui_*
+*.obj
+*.o
+*.a
+*.la
+*.lo
+*.dll
+*.so
+*.so.*
+*.dylib
+*.prl
+*.rsp
+*.tmp
+*.log
+
+# Build dirs
+build*/
+out*/
+bin*/
+dist*/
+.idea/
+.vscode/
+.DS_Store
+
+# Local data
+cameras.json
