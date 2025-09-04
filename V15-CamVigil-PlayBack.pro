@@ -1,9 +1,10 @@
 QT       += core gui
 QT += widgets multimedia multimediawidgets opengl
-
+QT += sql
+QT += network
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++11
+CONFIG += c++17
 
 # Disable deprecated Qt APIs before version 6.0.0
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000
@@ -29,6 +30,7 @@ SOURCES += \
     cameramanager.cpp \
     camerastreams.cpp \
     fullscreenviewer.cpp \
+    hik_time.cpp \
     layoutmanager.cpp \
     main.cpp \
     mainwindow.cpp \
@@ -53,6 +55,7 @@ HEADERS += \
     clickablelabel.h \
     fullscreenviewer.h \
     glcontainerwidget.h \
+    hik_time.h \
     layoutmanager.h \
     mainwindow.h \
     navbar.h \

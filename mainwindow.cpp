@@ -8,6 +8,7 @@
 #include <QResizeEvent>
 #include "glcontainerwidget.h"
 #include <QTimer>
+#include "hik_time.h"
 
 // Helper function to add watermark to a pixmap.
 QPixmap addWatermark(const QPixmap& original, const QString& watermarkText) {
@@ -47,6 +48,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Creating CameraManager instance.
     cameraManager = new CameraManager();
     std::vector<CamHWProfile> profiles = cameraManager->getCameraProfiles();
+    hik::syncAllAsync(profiles);
     int numCameras = profiles.size();
     layoutManager->calculateGridDimensions(numCameras, gridRows, gridCols);
     layoutManager->setupLayout(numCameras);
@@ -201,4 +203,3 @@ void MainWindow::startStreamingAsync() {
         startStreamingAsync();
     }
 }*/
-
