@@ -2,6 +2,7 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include "subscriptionmanager.h"
+#include <QGridLayout>
 
 Toolbar::Toolbar(QWidget* parent)
     : QWidget(parent),
@@ -15,23 +16,41 @@ Toolbar::Toolbar(QWidget* parent)
         "padding: 10px;"
     );
 
-    QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 5, 10, 5);
+    // 3-column grid: [left/status] [center/clock] [right/controls]
+        auto* grid = new QGridLayout(this);
+        grid->setContentsMargins(10, 5, 10, 5);
+       grid->setHorizontalSpacing(12);
+        // Columns stretch equally around the center so the clock stays centered.
+        grid->setColumnStretch(0, 1);   // left  space
+       grid->setColumnStretch(1, 0);   // center (clock)
+        grid->setColumnStretch(2, 1);   // right space (buttons live inside)
 
     // Status label only
     statusLabel = new QLabel("Standalone Mode", this);
     statusLabel->setStyleSheet("color: orange; font-size: 18px; padding-left: 5px;");
-    layout->addWidget(statusLabel, 0, Qt::AlignLeft);
-
-    layout->addStretch();
+    grid->addWidget(statusLabel, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
 
     // Clock Label
     clockLabel = new QLabel(this);
     clockLabel->setAlignment(Qt::AlignCenter);
     clockLabel->setStyleSheet("color: white; padding: 5px;");
-    layout->addWidget(clockLabel, 0, Qt::AlignCenter);
+    grid->addWidget(clockLabel, 0, 1, Qt::AlignCenter);
 
-    layout->addStretch();
+    // Right control group (Playback + Settings), right-aligned as a unit
+        QWidget* rightBox = new QWidget(this);
+        auto* right = new QHBoxLayout(rightBox);
+       right->setContentsMargins(0,0,0,0);
+        right->setSpacing(12);
+
+        // Playback Button (orange text)
+        playbackButton = new QPushButton("▶ Playback", this);
+        playbackButton->setStyleSheet(
+            "QPushButton { color: orange; padding: 6px 13px; font-weight: 900; font-size: 18px; }"
+            "QPushButton:hover { background-color: #444444; }"
+            "QPushButton:pressed { background-color: #222222; }"
+        );
+        connect(playbackButton, &QPushButton::clicked, this, &Toolbar::playbackButtonClicked);
+        right->addWidget(playbackButton, 0, Qt::AlignRight);
 
     // Settings Button
     settingsButton = new QPushButton("⚙ Settings", this);
@@ -49,9 +68,9 @@ Toolbar::Toolbar(QWidget* parent)
         "   background-color: #222222;"
         "}"
     );
-    layout->addWidget(settingsButton, 0, Qt::AlignRight);
-
-    setLayout(layout);
+    right->addWidget(settingsButton, 0, Qt::AlignRight);
+        grid->addWidget(rightBox, 0, 2, Qt::AlignRight | Qt::AlignVCenter);
+        setLayout(grid);
 
     // Connect Settings Button to Signal
     connect(settingsButton, &QPushButton::clicked, this, &Toolbar::settingsButtonClicked);

@@ -17,7 +17,7 @@ public:
 
 signals:
     void settingsButtonClicked();
-
+    void playbackButtonClicked();
 private slots:
     void updateClock();
     void checkInternetConnection();
@@ -29,6 +29,7 @@ private:
     QTimer* clockTimer;
     QNetworkAccessManager* networkManager;
     QTimer* checkTimer;
+    QPushButton* playbackButton;
 };
 
 #endif // TOOLBAR_H

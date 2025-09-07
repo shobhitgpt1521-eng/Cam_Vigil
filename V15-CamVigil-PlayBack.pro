@@ -38,6 +38,7 @@ SOURCES += \
     mainwindow.cpp \
     navbar.cpp \
     operationstatuswidget.cpp \
+    playbackwindow.cpp \
     settingswindow.cpp \
     storagedetailswidget.cpp \
     streammanager.cpp \
@@ -63,6 +64,7 @@ HEADERS += \
     mainwindow.h \
     navbar.h \
     operationstatuswidget.h \
+    playbackwindow.h \
     settingswindow.h \
     storagedetailswidget.h \
     streammanager.h \

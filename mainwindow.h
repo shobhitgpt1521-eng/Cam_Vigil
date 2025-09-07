@@ -13,6 +13,7 @@
 #include "clickablelabel.h"      // For clickable labels
 #include "fullscreenviewer.h"    // For fullscreen display
 #include "cameramanager.h"       // Persistent camera management
+class PlaybackWindow;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -31,6 +32,7 @@ protected:
 
 private slots:
     void openSettingsWindow();
+    void openPlaybackWindow();
     void showFullScreenFeed(int index);
 
 private:
@@ -54,6 +56,7 @@ private:
         bool streamsStarted = false;
 
     QTimer* timeSyncTimer = nullptr;   //Manual camera time sync timer to send http request hourly basis
+    PlaybackWindow* playbackWindow = nullptr;
 };
 
 #endif // MAINWINDOW_H

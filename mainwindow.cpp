@@ -9,6 +9,8 @@
 #include "glcontainerwidget.h"
 #include <QTimer>
 #include "hik_time.h"
+#include "playbackwindow.h"
+
 
 // Helper function to add watermark to a pixmap.
 QPixmap addWatermark(const QPixmap& original, const QString& watermarkText) {
@@ -44,6 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     toolbar = new Toolbar(this);
 
     connect(toolbar, &Toolbar::settingsButtonClicked, this, &MainWindow::openSettingsWindow);
+    connect(toolbar, &Toolbar::playbackButtonClicked, this, &MainWindow::openPlaybackWindow);
+
 
     // Creating CameraManager instance.
     cameraManager = new CameraManager();
@@ -134,7 +138,15 @@ void MainWindow::openSettingsWindow() {
     settingsWindow->raise();
     settingsWindow->activateWindow();
 }
-
+void MainWindow::openPlaybackWindow() {
+    if (!playbackWindow) {
+        playbackWindow = new PlaybackWindow(this);
+        playbackWindow->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    }
+    playbackWindow->showFullScreen();
+    playbackWindow->raise();
+    playbackWindow->activateWindow();
+}
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
