@@ -52,6 +52,8 @@ private:
     QVector<ClickableLabel*> streamDisplayLabels;
         void startStreamingAsync();
         bool streamsStarted = false;
+
+    QTimer* timeSyncTimer = nullptr;   //Manual camera time sync timer to send http request hourly basis
 };
 
 #endif // MAINWINDOW_H

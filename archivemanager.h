@@ -12,6 +12,8 @@
 #include "camerastreams.h" // for CamHWProfile
 #include <libudev.h>
 
+
+class DbWriter;
 class ArchiveManager : public QObject {
     Q_OBJECT
 public:
@@ -57,6 +59,9 @@ private:
     std::vector<CamHWProfile> cameraProfiles;
 
     void setupUdevMonitor();
+    QThread* dbThread = nullptr;
+    DbWriter* db = nullptr;
+    QString sessionId;
 };
 
 #endif // ARCHIVEMANAGER_H

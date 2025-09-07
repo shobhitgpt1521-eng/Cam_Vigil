@@ -28,6 +28,8 @@ public slots:
 signals:
     void recordingError(const std::string& error);
     void segmentFinalized();
+    void segmentOpened(int camIndex, QString filePath, qint64 startUtcNs);     //meta data to store in db
+    void segmentClosed(int camIndex, QString filePath, qint64 endUtcNs, qint64 durationMs);//meta data to store in db
 
 private:
     std::string cameraUrl;
@@ -51,6 +53,9 @@ private:
 
     static gchar* formatLocationFullCallback(GstElement* splitmux, guint fragment_id, GstSample* sample, gpointer user_data);
     static void onBusMessage(GstBus* bus, GstMessage* message, gpointer user_data);
+    QString currentFilePath;
+    QDateTime currentStartTimeUtc;
+    QMutex curMutex;
 };
 
 #endif // ARCHIVEWORKER_H

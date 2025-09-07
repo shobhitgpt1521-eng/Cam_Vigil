@@ -1,7 +1,8 @@
 QT       += core gui
 QT += widgets multimedia multimediawidgets opengl
 QT += sql
-QT += network
+QT += network concurrent
+
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
@@ -29,6 +30,7 @@ SOURCES += \
     cameradetailswidget.cpp \
     cameramanager.cpp \
     camerastreams.cpp \
+    db_writer.cpp \
     fullscreenviewer.cpp \
     hik_time.cpp \
     layoutmanager.cpp \
@@ -53,6 +55,7 @@ HEADERS += \
     cameramanager.h \
     camerastreams.h \
     clickablelabel.h \
+    db_writer.h \
     fullscreenviewer.h \
     glcontainerwidget.h \
     hik_time.h \

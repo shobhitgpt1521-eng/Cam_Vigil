@@ -16,6 +16,9 @@
 #include <QVariantList>
 #include <QDBusMetaType>   // For qDBusRegisterMetaType<...>()
 
+#include "db_writer.h"
+#include <QUuid>
+
 
 
 ArchiveManager::ArchiveManager(QObject *parent)
@@ -94,6 +97,12 @@ ArchiveManager::~ArchiveManager()
     if (m_udev) {
         udev_unref(m_udev);
     }
+    // stop DB thread
+        if (dbThread) {
+            dbThread->quit();
+            dbThread->wait();
+            dbThread = nullptr;
+        }
     qDebug() << "[ArchiveManager] Destroyed.";
 }
 
@@ -175,6 +184,29 @@ void ArchiveManager::startRecording(const std::vector<CamHWProfile> &camProfiles
     if (!dir.exists()) {
         dir.mkpath(".");
     }
+    // ---- DB bring-up ----
+        if (!dbThread) {
+            dbThread = new QThread(this);
+            db = new DbWriter();
+            db->moveToThread(dbThread);
+            connect(dbThread, &QThread::finished, db, &QObject::deleteLater);
+            dbThread->start();
+            QMetaObject::invokeMethod(db, "openAt", Qt::BlockingQueuedConnection,
+                                      Q_ARG(QString, archiveDir + "/camvigil.sqlite"));
+        }
+        // ensure cameras
+        for (const auto& p : camProfiles) {
+            QMetaObject::invokeMethod(db, "ensureCamera", Qt::QueuedConnection,
+                Q_ARG(QString, QString::fromStdString(p.url)),
+                Q_ARG(QString, QString::fromStdString(p.suburl)),
+                Q_ARG(QString, QString::fromStdString(p.displayName)));
+        }
+        // session
+        sessionId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QMetaObject::invokeMethod(db, "beginSession", Qt::QueuedConnection,
+            Q_ARG(QString, sessionId), Q_ARG(QString, archiveDir), Q_ARG(int, defaultDuration));
+        // ----------------------
+
     QDateTime masterStart = QDateTime::currentDateTime();
     qDebug() << "[ArchiveManager] Master start time:" << masterStart.toString("yyyyMMdd_HHmmss");
     for (size_t i = 0; i < camProfiles.size(); ++i) {
@@ -189,6 +221,23 @@ void ArchiveManager::startRecording(const std::vector<CamHWProfile> &camProfiles
         connect(worker, &ArchiveWorker::recordingError, [](const std::string &err){
             qDebug() << "[ArchiveManager] ArchiveWorker error:" << QString::fromStdString(err);
         });
+        // segment → DB
+        // ----------------------
+        connect(worker, &ArchiveWorker::segmentOpened, this,
+                        [this, camProfiles](int camIdx, const QString& path, qint64 startNs){
+                            const QString camUrl = QString::fromStdString(camProfiles[camIdx].url);
+                            QMetaObject::invokeMethod(db, "addSegmentOpened", Qt::QueuedConnection,
+                                Q_ARG(QString, sessionId), Q_ARG(QString, camUrl),
+                                Q_ARG(QString, path), Q_ARG(qint64, startNs));
+                        });
+        // ----------------------
+        connect(worker, &ArchiveWorker::segmentClosed, this,
+                        [this, camProfiles](int camIdx, const QString& path, qint64 endNs, qint64 durMs){
+                            Q_UNUSED(camIdx);
+                            QMetaObject::invokeMethod(db, "finalizeSegmentByPath", Qt::QueuedConnection,
+                                Q_ARG(QString, path), Q_ARG(qint64, endNs), Q_ARG(qint64, durMs));
+                        });
+        // ----------------------
         connect(worker, &ArchiveWorker::segmentFinalized, this, &ArchiveManager::segmentWritten);
         workers.push_back(worker);
         worker->start();

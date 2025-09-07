@@ -49,6 +49,14 @@ MainWindow::MainWindow(QWidget *parent)
     cameraManager = new CameraManager();
     std::vector<CamHWProfile> profiles = cameraManager->getCameraProfiles();
     hik::syncAllAsync(profiles);
+    // hourly resync
+    timeSyncTimer = new QTimer(this);
+    timeSyncTimer->setTimerType(Qt::VeryCoarseTimer);          // low wakeups
+    timeSyncTimer->setInterval(60 * 60 * 1000);                // 1 hour
+    connect(timeSyncTimer, &QTimer::timeout, this, [this]() {
+        hik::syncAllAsync(cameraManager->getCameraProfiles()); // fresh list each tick
+    });
+    timeSyncTimer->start();
     int numCameras = profiles.size();
     layoutManager->calculateGridDimensions(numCameras, gridRows, gridCols);
     layoutManager->setupLayout(numCameras);

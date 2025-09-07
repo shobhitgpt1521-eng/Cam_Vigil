@@ -2,6 +2,7 @@
 #include <QDir>
 #include <QDebug>
 #include <QThread>
+#include <QMutexLocker>
 #include <gst/gst.h>
 
 ArchiveWorker::ArchiveWorker(const std::string& url,
@@ -198,6 +199,26 @@ gchar* ArchiveWorker::formatLocationFullCallback(GstElement* splitmux, guint fra
                            .arg(timestamp);
     qDebug() << "[ArchiveWorker] New segment:" << filename;
 
+    // --- DB notifications: close previous, open new ---
+       const qint64 startNs = segmentStartTime.toUTC().toMSecsSinceEpoch() * 1000000LL;
+       {
+           QMutexLocker lk(&worker->curMutex);
+           // finalize previous file if present
+           if (!worker->currentFilePath.isEmpty() && worker->currentStartTimeUtc.isValid()) {
+               const qint64 endMs = worker->currentStartTimeUtc.msecsTo(segmentStartTime);
+               const qint64 endNs =
+                   worker->currentStartTimeUtc.toMSecsSinceEpoch()*1000000LL + endMs*1000000LL;
+               emit worker->segmentClosed(worker->cameraIndex,
+                                          worker->currentFilePath,
+                                          endNs, endMs);
+           }
+           // open new
+           worker->currentFilePath = filename;
+           worker->currentStartTimeUtc = segmentStartTime.toUTC();
+       }
+       emit worker->segmentOpened(worker->cameraIndex, filename, startNs);
+       // ---------------------------------------------------
+
     // Apply pending duration update if flagged
     if (worker->pendingDurationUpdate.load()) {
         qint64 maxSizeTimeNs = static_cast<qint64>(worker->nextSegmentDuration) * 1000000000LL;
@@ -238,6 +259,19 @@ void ArchiveWorker::onBusMessage(GstBus* bus, GstMessage* message, gpointer user
         break;
     }
     case GST_MESSAGE_EOS:
+        // finalize the current open segment on EOS
+                {
+                    QMutexLocker lk(&worker->curMutex);
+                    if (!worker->currentFilePath.isEmpty() && worker->currentStartTimeUtc.isValid()) {
+                        const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
+                        const qint64 durMs = worker->currentStartTimeUtc.msecsTo(nowUtc);
+                        const qint64 endNs = nowUtc.toMSecsSinceEpoch()*1000000LL;
+                        emit worker->segmentClosed(worker->cameraIndex,
+                                                   worker->currentFilePath, endNs, durMs);
+                        worker->currentFilePath.clear();
+                        worker->currentStartTimeUtc = QDateTime();
+                    }
+                }
         qDebug() << "[ArchiveWorker] GST EOS received for cam" << worker->cameraIndex;
         emit worker->segmentFinalized();
         break;
