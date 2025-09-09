@@ -139,14 +139,47 @@ void MainWindow::openSettingsWindow() {
     settingsWindow->activateWindow();
 }
 void MainWindow::openPlaybackWindow() {
+    const QString dbPath =
+        (archiveManager ? archiveManager->archiveRoot() + "/camvigil.sqlite" : QString());
+
+    bool created = false;
     if (!playbackWindow) {
-        playbackWindow = new PlaybackWindow(this);
+        // New window (previous one was never created or was deleted on close)
+        playbackWindow = new PlaybackWindow(nullptr);              // keep it top-level
+        playbackWindow->setAttribute(Qt::WA_DeleteOnClose, true);  // self-destruct on close
         playbackWindow->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+
+        connect(playbackWindow, &QObject::destroyed, this, [this]{
+            qInfo() << "[Main] PlaybackWindow destroyed, clearing pointer";
+            playbackWindow = nullptr; // QPointer auto-nulls, this is just explicit
+        });
+        created = true;
     }
+
+    // Only (re)open the DB when we just created the window (or when you detect a path change).
+    if (created && !dbPath.isEmpty() && QFileInfo::exists(dbPath)) {
+        playbackWindow->openDb(dbPath);
+    } else if (created) {
+        // Fallback: show camera names even if DB doesn't exist yet
+        QStringList camNames;
+        const auto profiles = cameraManager->getCameraProfiles();
+        camNames.reserve(static_cast<int>(profiles.size()));
+        for (const auto& p : profiles) {
+            camNames << (p.displayName.empty()
+                         ? QString::fromStdString(p.url)
+                         : QString::fromStdString(p.displayName));
+        }
+        playbackWindow->setCameraList(camNames);
+    }
+
+    // Show/raise the existing (or newly created) window.
     playbackWindow->showFullScreen();
     playbackWindow->raise();
     playbackWindow->activateWindow();
 }
+
+
+
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);

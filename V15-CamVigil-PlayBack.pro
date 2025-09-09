@@ -30,6 +30,7 @@ SOURCES += \
     cameradetailswidget.cpp \
     cameramanager.cpp \
     camerastreams.cpp \
+    db_reader.cpp \
     db_writer.cpp \
     fullscreenviewer.cpp \
     hik_time.cpp \
@@ -38,6 +39,10 @@ SOURCES += \
     mainwindow.cpp \
     navbar.cpp \
     operationstatuswidget.cpp \
+    playback_controls.cpp \
+    playback_timeline_controller.cpp \
+    playback_timeline_model.cpp \
+    playback_timeline_view.cpp \
     playbackwindow.cpp \
     settingswindow.cpp \
     storagedetailswidget.cpp \
@@ -56,6 +61,7 @@ HEADERS += \
     cameramanager.h \
     camerastreams.h \
     clickablelabel.h \
+    db_reader.h \
     db_writer.h \
     fullscreenviewer.h \
     glcontainerwidget.h \
@@ -64,6 +70,10 @@ HEADERS += \
     mainwindow.h \
     navbar.h \
     operationstatuswidget.h \
+    playback_controls.h \
+    playback_timeline_controller.h \
+    playback_timeline_model.h \
+    playback_timeline_view.h \
     playbackwindow.h \
     settingswindow.h \
     storagedetailswidget.h \

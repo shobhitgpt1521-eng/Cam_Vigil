@@ -20,6 +20,8 @@ public:
     explicit ArchiveManager(QObject* parent = nullptr);
     ~ArchiveManager();
 
+    QString archiveRoot() const { return archiveDir; }  // exposing archive root so we can find the db
+
     // Start recording for each camera profile.
     void startRecording(const std::vector<CamHWProfile>& cameraProfiles);
     // Stop all recording threads.

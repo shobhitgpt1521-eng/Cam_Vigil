@@ -51,7 +51,8 @@ bool DbWriter::ensureSchema() {
          " FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,"
          " FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE SET NULL );") &&
     exec("CREATE INDEX IF NOT EXISTS idx_segments_camera_time ON segments(camera_id,start_utc_ns);") &&
-    exec("CREATE INDEX IF NOT EXISTS idx_segments_path ON segments(file_path);");
+    exec("CREATE INDEX IF NOT EXISTS idx_segments_path ON segments(file_path);")&&
+    exec("CREATE INDEX IF NOT EXISTS idx_segments_camera_url_time ON segments(camera_url, start_utc_ns);");
 }
 
 void DbWriter::ensureCamera(const QString& mainUrl, const QString& subUrl, const QString& name) {

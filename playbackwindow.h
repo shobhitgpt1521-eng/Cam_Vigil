@@ -1,8 +1,55 @@
 #pragma once
-#include <QMainWindow>
-
-class PlaybackWindow : public QMainWindow {
+#include <QWidget>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QThread>
+#include <QMap>
+#include "db_reader.h"
+#include "playback_controls.h"
+#include "playback_timeline_controller.h"
+#include <QToolButton>
+class PlaybackTimelineView;
+class PlaybackTimelineModel;
+class QCloseEvent;
+class PlaybackWindow : public QWidget {
     Q_OBJECT
 public:
     explicit PlaybackWindow(QWidget* parent=nullptr);
+    ~PlaybackWindow();
+
+    // Call this with ".../CamVigilArchives/camvigil.sqlite"
+    void openDb(const QString& dbPath);
+    void setCameraList(const QStringList& names);
+protected:
+    void closeEvent(QCloseEvent* e) override;
+private:
+    QLabel* title{};
+    PlaybackControlsWidget* controls{};
+
+    // DB backend (read-only) in its own thread
+    DbReader* db{nullptr};
+    QThread* dbThread{nullptr};
+    QVector<int> camIds;           // index-aligned with names we show
+    QMap<QString,int> nameToId;    // name → camera_id (for quick lookup)
+    static QString toYmd(const QDate& d) { return d.toString("yyyy-MM-dd"); }
+    int selectedCamId = -1;
+    // Timeline
+    PlaybackTimelineView* timelineView{nullptr};
+    PlaybackTimelineController* timelineCtl{nullptr};
+    qint64 dayStartNs(const QDate&) const;
+    qint64 dayEndNs(const QDate&) const;
+    QString fmtRangeLocal(qint64 ns0, qint64 ns1) const;
+
+    QToolButton* closeBtn{};
+    bool backendStopped_{false};
+    void stopBackend();
+    QMetaObject::Connection dbFinishedConn_; // not used anymore; kept to show intent
+    static inline QString tid() { return QString::number((qulonglong)QThread::currentThreadId(), 16); }
+private slots:
+    void onCamerasReady(const CamList& cams);
+    void onDaysReady(int cameraId, const QStringList& ymdList);
+    void onSegmentsReady(int cameraId, const SegmentList& segs);
+    void onUiCameraChanged(const QString& camName);
+    void onUiDateChanged(const QDate& date);
 };
