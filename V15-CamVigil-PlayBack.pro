@@ -40,6 +40,7 @@ SOURCES += \
     navbar.cpp \
     operationstatuswidget.cpp \
     playback_controls.cpp \
+    playback_db_service.cpp \
     playback_timeline_controller.cpp \
     playback_timeline_model.cpp \
     playback_timeline_view.cpp \
@@ -71,6 +72,7 @@ HEADERS += \
     navbar.h \
     operationstatuswidget.h \
     playback_controls.h \
+    playback_db_service.h \
     playback_timeline_controller.h \
     playback_timeline_model.h \
     playback_timeline_view.h \

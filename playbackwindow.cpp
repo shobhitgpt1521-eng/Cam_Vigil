@@ -5,6 +5,8 @@
 #include <QToolButton>
 #include <QCloseEvent>
 #include "playback_timeline_view.h"
+#include "playback_db_service.h"
+#include <QThread>
 PlaybackWindow::PlaybackWindow(QWidget* parent)
     : QWidget(parent)
 {
@@ -73,74 +75,53 @@ PlaybackWindow::PlaybackWindow(QWidget* parent)
 void PlaybackWindow::setCameraList(const QStringList& names) {
     controls->setCameraList(names);
 }
+QString PlaybackWindow::tid() {
+    // QThread::currentThreadId() returns a pointer-like handle; stringify as hex
+    const quintptr p = reinterpret_cast<quintptr>(QThread::currentThreadId());
+    return QString::number(p, 16);
+}
 PlaybackWindow::~PlaybackWindow() {
     qInfo() << "[PW] dtor tid=" << tid() << "this=" << this;
-    timelineCtl->detach();
-     stopBackend();
-}
-void PlaybackWindow::stopBackend() {
-    qInfo() << "[PW] stopBackend() begin, tid=" << tid();
-    if (backendStopped_) return;
-    backendStopped_ = true;
-    if (timelineCtl) timelineCtl->detach();
-    if (dbThread) {
-            // IMPORTANT: never rely on QThread::finished → db->deleteLater (removed below).
-            // Tear down DB synchronously on its own thread:
-            if (db) {
-                QMetaObject::invokeMethod(db, "shutdown", Qt::BlockingQueuedConnection);
-                db = nullptr;
-            }
-            dbThread->quit();
-            if (!dbThread->wait(7000)) {
-                qWarning() << "[Playback] DB thread didn't quit in time, terminating…";
-                dbThread->terminate();
-                dbThread->wait();
-            }
-            dbThread->deleteLater();
-            dbThread = nullptr;
-        }
-        qInfo() << "[PW] stopBackend() end, tid=" << tid();
 }
 
 void PlaybackWindow::closeEvent(QCloseEvent* e) {
     qInfo() << "[PW] closeEvent tid=" << tid();
     controls->setEnabled(false);
-    stopBackend();
+    if (timelineCtl) timelineCtl->detach();
     e->accept();
 }
 void PlaybackWindow::openDb(const QString& dbPath) {
     qInfo() << "[PW] openDb(" << dbPath << ") tid=" << tid();
     if (dbPath.isEmpty()) return;
-    if (!dbThread) {
-        dbThread = new QThread(this);
-        db = new DbReader();
-        db->moveToThread(dbThread);
+    // Attach to the shared DB service
+        auto svc = PlaybackDbService::instance();
+        svc->ensureOpened(dbPath);          // idempotent
+        DbReader* newDb = svc->reader();
 
+        if (db != newDb) {
+           // Rebind signals safely for this window context
+            if (db) QObject::disconnect(db, nullptr, this, nullptr);
+            db = newDb;
+            connect(db, &DbReader::opened, this, [](bool ok, const QString& err){
+                if (!ok) qWarning() << "[Playback] DB open failed:" << err;
+            });
+            connect(db, &DbReader::camerasReady, this,
+                    &PlaybackWindow::onCamerasReady, Qt::QueuedConnection);
+            connect(db, &DbReader::daysReady,     this,
+                    &PlaybackWindow::onDaysReady, Qt::QueuedConnection);
+            connect(db, &DbReader::segmentsReady, this,
+                    &PlaybackWindow::onSegmentsReady, Qt::QueuedConnection);
+            connect(db, &DbReader::error,         this,
+                    [](const QString& e){ qWarning() << "[Playback] DB error:" << e; });
+        }
 
-        connect(db, &DbReader::opened, this, [](bool ok, const QString& err){
-                    if (!ok) qWarning() << "[Playback] DB open failed:" << err;
-                });
-                connect(db, &DbReader::camerasReady, this,
-                        &PlaybackWindow::onCamerasReady, Qt::QueuedConnection);
-                connect(db, &DbReader::daysReady,     this,
-                        &PlaybackWindow::onDaysReady, Qt::QueuedConnection);
-                connect(db, &DbReader::segmentsReady, this,
-                        &PlaybackWindow::onSegmentsReady, Qt::QueuedConnection);
-                connect(db, &DbReader::error,         this,
-                        [](const QString& e){ qWarning() << "[Playback] DB error:" << e; });
-        dbThread->start();
-
-    }
-        backendStopped_ = false;
-    // Always attach controller to the current DbReader and set resolver
+        // Attach controller to shared DbReader and set resolver
         timelineCtl->attach(db);
         timelineCtl->setCameraResolver([this](const QString& name){
             return nameToId.value(name, -1);
         });
         controls->setGoIdle();
-    // Open and fetch cameras
-    QMetaObject::invokeMethod(db, "openAt",      Qt::QueuedConnection,
-                              Q_ARG(QString, dbPath));
+    // Fetch cameras
     QMetaObject::invokeMethod(db, "listCameras", Qt::QueuedConnection);
 }
 void PlaybackWindow::onCamerasReady(const CamList& cams) {

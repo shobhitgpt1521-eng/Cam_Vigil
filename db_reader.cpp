@@ -98,6 +98,8 @@ void DbReader::listSegments(int cameraId, const QString& ymd) {
     QVector<SegmentInfo> segs;
     QSqlQuery q(db_);
     q.setForwardOnly(true);
+
+    // NOTE: no "now()" fallback — open-ended rows collapse to start_utc_ns
     q.prepare(R"SQL(
       SELECT path, start_utc_ns, eff_end_ns, duration_ms FROM (
         -- branch 1: rows with camera_id filled (uses idx_segments_camera_time)
@@ -105,9 +107,9 @@ void DbReader::listSegments(int cameraId, const QString& ymd) {
           s.file_path AS path,
           s.start_utc_ns,
           CASE
-            WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns>0 THEN s.end_utc_ns
-            WHEN COALESCE(s.duration_ms,0)>0 THEN s.start_utc_ns + s.duration_ms*1000000
-            ELSE CAST(strftime('%s','now') AS INTEGER)*1000000000
+            WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns > 0 THEN s.end_utc_ns
+            WHEN COALESCE(s.duration_ms,0) > 0 THEN s.start_utc_ns + s.duration_ms*1000000
+            ELSE s.start_utc_ns
           END AS eff_end_ns,
           s.duration_ms
         FROM segments s
@@ -116,22 +118,22 @@ void DbReader::listSegments(int cameraId, const QString& ymd) {
           AND s.start_utc_ns < :end_ns
           AND (
                 CASE
-                  WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns>0 THEN s.end_utc_ns
-                  WHEN COALESCE(s.duration_ms,0)>0 THEN s.start_utc_ns + s.duration_ms*1000000
-                  ELSE CAST(strftime('%s','now') AS INTEGER)*1000000000
+                  WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns > 0 THEN s.end_utc_ns
+                  WHEN COALESCE(s.duration_ms,0) > 0 THEN s.start_utc_ns + s.duration_ms*1000000
+                  ELSE s.start_utc_ns
                 END
               ) > :start_ns
 
         UNION ALL
 
-        -- branch 2: legacy rows matched by URL (needs idx_segments_camera_url_time)
+        -- branch 2: legacy rows matched by URL
         SELECT
           s.file_path AS path,
           s.start_utc_ns,
           CASE
-            WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns>0 THEN s.end_utc_ns
-            WHEN COALESCE(s.duration_ms,0)>0 THEN s.start_utc_ns + s.duration_ms*1000000
-            ELSE CAST(strftime('%s','now') AS INTEGER)*1000000000
+            WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns > 0 THEN s.end_utc_ns
+            WHEN COALESCE(s.duration_ms,0) > 0 THEN s.start_utc_ns + s.duration_ms*1000000
+            ELSE s.start_utc_ns
           END AS eff_end_ns,
           s.duration_ms
         FROM segments s
@@ -141,9 +143,9 @@ void DbReader::listSegments(int cameraId, const QString& ymd) {
           AND s.start_utc_ns < :end_ns
           AND (
                 CASE
-                  WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns>0 THEN s.end_utc_ns
-                  WHEN COALESCE(s.duration_ms,0)>0 THEN s.start_utc_ns + s.duration_ms*1000000
-                  ELSE CAST(strftime('%s','now') AS INTEGER)*1000000000
+                  WHEN s.end_utc_ns IS NOT NULL AND s.end_utc_ns > 0 THEN s.end_utc_ns
+                  WHEN COALESCE(s.duration_ms,0) > 0 THEN s.start_utc_ns + s.duration_ms*1000000
+                  ELSE s.start_utc_ns
                 END
               ) > :start_ns
       )
@@ -172,3 +174,4 @@ void DbReader::listSegments(int cameraId, const QString& ymd) {
     }
     emit segmentsReady(cameraId, segs);
 }
+

@@ -3,7 +3,6 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QThread>
 #include <QMap>
 #include "db_reader.h"
 #include "playback_controls.h"
@@ -29,7 +28,6 @@ private:
 
     // DB backend (read-only) in its own thread
     DbReader* db{nullptr};
-    QThread* dbThread{nullptr};
     QVector<int> camIds;           // index-aligned with names we show
     QMap<QString,int> nameToId;    // name → camera_id (for quick lookup)
     static QString toYmd(const QDate& d) { return d.toString("yyyy-MM-dd"); }
@@ -42,10 +40,7 @@ private:
     QString fmtRangeLocal(qint64 ns0, qint64 ns1) const;
 
     QToolButton* closeBtn{};
-    bool backendStopped_{false};
-    void stopBackend();
-    QMetaObject::Connection dbFinishedConn_; // not used anymore; kept to show intent
-    static inline QString tid() { return QString::number((qulonglong)QThread::currentThreadId(), 16); }
+    static QString tid();
 private slots:
     void onCamerasReady(const CamList& cams);
     void onDaysReady(int cameraId, const QStringList& ymdList);
