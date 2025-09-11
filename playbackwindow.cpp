@@ -2,11 +2,14 @@
 #include <QDebug>
 #include <QMetaType>
 #include <QDateTime>
-#include <QToolButton>
 #include <QCloseEvent>
 #include "playback_timeline_view.h"
 #include "playback_db_service.h"
+#include "playback_video_box.h"
+#include "playback_title_bar.h"
+#include "playback_side_controls.h"
 #include <QThread>
+#include <QVBoxLayout>
 PlaybackWindow::PlaybackWindow(QWidget* parent)
     : QWidget(parent)
 {
@@ -17,35 +20,36 @@ PlaybackWindow::PlaybackWindow(QWidget* parent)
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0,0,0,0);
     root->setSpacing(0);
-    // Top bar
-    auto* top = new QWidget(this);
-    top->setStyleSheet("background:#1b1b1b; border-bottom:1px solid #333;");
-    auto* topLay = new QHBoxLayout(top);
-    topLay->setContentsMargins(12,8,12,8);
-    title = new QLabel("Playback", top);
-    title->setStyleSheet("font-size:20px; font-weight:800; color:white;");
-    controls = new PlaybackControlsWidget(top);
-    topLay->addWidget(title, 0, Qt::AlignVCenter|Qt::AlignLeft);
-    topLay->addStretch(1);                         // space for center / future items
-    topLay->addWidget(controls, 0, Qt::AlignRight);
-    // Close button (top-right)
-       closeBtn = new QToolButton(top);
-       closeBtn->setText(QString::fromUtf8("✕"));
-       closeBtn->setToolTip("Close");
-       closeBtn->setAutoRaise(true);
-       closeBtn->setStyleSheet(
-            "QToolButton{color:#bbb;padding:2px 8px;border:1px solid #3a3a3a;"
-            "border-radius:6px;background:#232323;}"
-            "QToolButton:hover{color:#fff;background:#2b2b2b;}"
-            "QToolButton:pressed{background:#1c1c1c;}"
-        );
-        topLay->addWidget(closeBtn, 0, Qt::AlignRight);
-        connect(closeBtn, &QToolButton::clicked, this, [this]{ close(); });
+    // Header bar (title + controls + close)
+        titleBar = new PlaybackTitleBar(this);
+        titleBar->setTitle("Playback");
+        controls = new PlaybackControlsWidget(titleBar);
+        titleBar->setRightWidget(controls);
+        connect(titleBar, &PlaybackTitleBar::closeRequested, this, [this]{ close(); });
     // Body placeholder
     auto* body = new QWidget(this);
     body->setStyleSheet("background:#111;");
-    root->addWidget(top);
-    root->addWidget(body, 1);
+    auto* bodyLay = new QHBoxLayout(body);
+        bodyLay->setContentsMargins(12,12,12,12);
+        bodyLay->setSpacing(12);
+
+        // --- New: Video box (left) + stacked controls (right) ---
+        videoBox = new PlaybackVideoBox(body);
+        videoBox->setPlaceholder(QStringLiteral("Please select the camera and date"));
+        videoBox->setStyleSheet("background:#111;");
+        videoBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+           sideControls = new PlaybackSideControls(body);
+           sideControls->setFixedWidth(140);
+            // (signals ready for wiring later)
+            // connect(sideControls, &PlaybackSideControls::playClicked,  ...);
+            // connect(sideControls, &PlaybackSideControls::pauseClicked, ...);
+
+        bodyLay->addWidget(videoBox, 1);
+        bodyLay->addWidget(sideControls, 0);
+
+        root->addWidget(titleBar);
+        root->addWidget(body, 1);
     // bottom 24h timeline view
     timelineView = new PlaybackTimelineView(this);
     timelineView->setStyleSheet("background:#111;");

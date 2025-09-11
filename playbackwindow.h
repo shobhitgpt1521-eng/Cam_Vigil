@@ -1,16 +1,16 @@
 #pragma once
 #include <QWidget>
-#include <QLabel>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QMap>
 #include "db_reader.h"
 #include "playback_controls.h"
 #include "playback_timeline_controller.h"
-#include <QToolButton>
+
 class PlaybackTimelineView;
 class PlaybackTimelineModel;
 class QCloseEvent;
+class PlaybackVideoBox;
+class PlaybackTitleBar;
+class PlaybackSideControls;
 class PlaybackWindow : public QWidget {
     Q_OBJECT
 public:
@@ -23,10 +23,11 @@ public:
 protected:
     void closeEvent(QCloseEvent* e) override;
 private:
-    QLabel* title{};
-    PlaybackControlsWidget* controls{};
-
-    // DB backend (read-only) in its own thread
+    PlaybackTitleBar*       titleBar{nullptr};
+    PlaybackControlsWidget* controls{};      // hosted inside titleBar
+    PlaybackVideoBox*       videoBox{nullptr};
+    PlaybackSideControls*   sideControls{nullptr};
+    //DB backend (read-only) in its own thread
     DbReader* db{nullptr};
     QVector<int> camIds;           // index-aligned with names we show
     QMap<QString,int> nameToId;    // name → camera_id (for quick lookup)
@@ -38,8 +39,6 @@ private:
     qint64 dayStartNs(const QDate&) const;
     qint64 dayEndNs(const QDate&) const;
     QString fmtRangeLocal(qint64 ns0, qint64 ns1) const;
-
-    QToolButton* closeBtn{};
     static QString tid();
 private slots:
     void onCamerasReady(const CamList& cams);

@@ -34,13 +34,15 @@ PlaybackControlsWidget::PlaybackControlsWidget(QWidget* parent)
     // Go button
         goBtn = new QPushButton("Go", this);
         goBtn->setCursor(Qt::PointingHandCursor);
-        goBtn->setStyleSheet(
-            "QPushButton{color:#fff;background:#2a2a2a;padding:6px 14px;border:1px solid #444;"
-            "border-radius:6px;}"
-            "QPushButton:hover{background:#333;border-color:#666;}"
-            "QPushButton:pressed{background:#1f1f1f;border-color:#888; padding-top:7px; padding-bottom:5px;}"
-            "QPushButton:disabled{color:#888;background:#1a1a1a;border-color:#333;}"
-        );
+           goBtn->setStyleSheet(
+                "QPushButton{color:#fff;background:#2a2a2a;padding:6px 14px;border:1px solid #444;"
+                "border-radius:6px;}"
+                "QPushButton:hover{background:#333;border-color:#666;}"
+                "QPushButton:pressed{background:#1f1f1f;border-color:#888; padding-top:7px; padding-bottom:5px;}"
+                "QPushButton:disabled{color:#888;background:#1a1a1a;border-color:#333;}"
+            );
+            goBtn->setFixedHeight(32);
+            goBtn->setMinimumWidth(100);
         connect(goBtn, &QPushButton::clicked, this, [this]{
                 setGoBusy();
             // emit action
