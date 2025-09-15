@@ -41,12 +41,15 @@ SOURCES += \
     operationstatuswidget.cpp \
     playback_controls.cpp \
     playback_db_service.cpp \
+    playback_segment_index.cpp \
     playback_side_controls.cpp \
+    playback_stitching_player.cpp \
     playback_timeline_controller.cpp \
     playback_timeline_model.cpp \
     playback_timeline_view.cpp \
     playback_title_bar.cpp \
     playback_video_box.cpp \
+    playback_video_player_gst.cpp \
     playbackwindow.cpp \
     settingswindow.cpp \
     storagedetailswidget.cpp \
@@ -76,12 +79,15 @@ HEADERS += \
     operationstatuswidget.h \
     playback_controls.h \
     playback_db_service.h \
+    playback_segment_index.h \
     playback_side_controls.h \
+    playback_stitching_player.h \
     playback_timeline_controller.h \
     playback_timeline_model.h \
     playback_timeline_view.h \
     playback_title_bar.h \
     playback_video_box.h \
+    playback_video_player_gst.h \
     playbackwindow.h \
     settingswindow.h \
     storagedetailswidget.h \

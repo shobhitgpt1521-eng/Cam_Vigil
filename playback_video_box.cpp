@@ -2,6 +2,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QFont>
+#include <QBoxLayout>
 
 PlaybackVideoBox::PlaybackVideoBox(QWidget* parent)
     : QWidget(parent)
@@ -9,6 +10,18 @@ PlaybackVideoBox::PlaybackVideoBox(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setMinimumSize(320, 180);
     setAutoFillBackground(false);
+        // Create a native child widget to host the video sink
+        auto* lay = new QVBoxLayout(this);
+        lay->setContentsMargins(12,12,12,12);
+        lay->setSpacing(0);
+
+        renderHost_ = new QWidget(this);
+        renderHost_->setAttribute(Qt::WA_NativeWindow, true);
+        renderHost_->setAutoFillBackground(true);
+        renderHost_->setStyleSheet("background:#000; border:1px solid #2f2f2f; border-radius:6px;");
+        renderHost_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+        lay->addWidget(renderHost_, 1);
 }
 
 void PlaybackVideoBox::setPlaceholder(const QString& text) {
@@ -20,22 +33,15 @@ void PlaybackVideoBox::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    // Card-style background
-    QRect r = rect().adjusted(12, 12, -12, -12);
-    p.fillRect(r, QColor(17,17,17));                 // #111
-    p.setPen(QColor("#2f2f2f"));
-    p.drawRect(r.adjusted(0,0,-1,-1));
-
-    // Inner border to suggest “video frame”
-    QRect inner = r.adjusted(8,8,-8,-8);
-    p.setPen(QColor("#3a3a3a"));
-    p.drawRect(inner.adjusted(0,0,-1,-1));
-
-    // Placeholder text centered
+    // Placeholder text centered over the whole widget area
+    QRect inner = rect();
     QFont f = p.font();
     f.setPointSizeF(f.pointSizeF()*1.1);
     f.setBold(true);
     p.setFont(f);
     p.setPen(QColor(180,180,180));
     p.drawText(inner, Qt::AlignCenter, placeholder_);
+}
+quintptr PlaybackVideoBox::renderWinId() const {
+    return renderHost_ ? quintptr(renderHost_->winId()) : 0;
 }

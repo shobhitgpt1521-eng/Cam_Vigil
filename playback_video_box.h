@@ -9,9 +9,10 @@ class PlaybackVideoBox : public QWidget {
 public:
    explicit PlaybackVideoBox(QWidget* parent=nullptr);
    void setPlaceholder(const QString& text);
-
+   quintptr renderWinId() const; // Native child window handle for GStreamer to render into
 protected:
    void paintEvent(QPaintEvent*) override;
 private:
     QString placeholder_ = QStringLiteral("Please select the camera and date");
+    QWidget* renderHost_  = nullptr;
 };

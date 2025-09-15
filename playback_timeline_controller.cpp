@@ -29,9 +29,13 @@ void PlaybackTimelineController::detach(){
 
 void PlaybackTimelineController::onGo(const QString& camName, const QDate& day){
     if (!db_) { emit log("[Ctl] onGo ignored: no DbReader"); return; }
-    if (!resolveCamId_) return;
+    if (!resolveCamId_) { emit log("[Ctl] onGo ignored: no camera resolver"); return; }
     const int cid = resolveCamId_(camName);
-    if (cid<=0 || !day.isValid()) return;
+    emit log(QString("[Ctl] onGo: camName='%1' resolved to cid=%2").arg(camName).arg(cid));
+    if (cid<=0 || !day.isValid()) { 
+        emit log(QString("[Ctl] onGo ignored: cid=%1 day.valid=%2").arg(cid).arg(day.isValid()));
+        return; 
+    }
     pendingCid_ = cid; pendingDay_ = day;
     emit log(QString("[Go] cid=%1 day=%2").arg(cid).arg(day.toString("yyyy-MM-dd")));
     QMetaObject::invokeMethod(db_, "listSegments", Qt::QueuedConnection,
