@@ -215,6 +215,7 @@ void PlaybackWindow::onCamerasReady(const CamList& cams) {
     }
 }
 void PlaybackWindow::onUiCameraChanged(const QString& camName) {
+    lastCamName_ = camName;
     const int cid = nameToId.value(camName, -1);
     selectedCamId = cid;
     
@@ -317,6 +318,16 @@ void PlaybackWindow::onSegmentsReady(int cameraId, const SegmentList& segs) {
                 << " metas=" << metas.size();
         if (sideControls) sideControls->setEnabledControls(!metas.isEmpty());
 }
+void PlaybackWindow::runGoFor(const QString& camName, const QDate& day) {
+    if (!timelineCtl) return;
+    // keep UI in sync
+    if (controls) controls->setDate(day);
+    currentDay_ = day;
+    // directly call the controller’s slot (same as Go)
+    QMetaObject::invokeMethod(timelineCtl, "onGo", Qt::QueuedConnection,
+                              Q_ARG(QString, camName),
+                              Q_ARG(QDate, day));
+}
 
     // helper to compute day window (local midnight)
     static inline qint64 toNs(qint64 s) { return s * 1000000000LL; }
@@ -403,7 +414,7 @@ void PlaybackWindow::onSegmentsReady(int cameraId, const SegmentList& segs) {
 
         // Handle state changes
         connect(stitch_, &PlaybackStitchingPlayer::stateChanged, this,
-                [this](bool playing){
+                [](bool playing){
                     qInfo() << "[PW] Playback state changed to:" << (playing ? "PLAYING" : "PAUSED");
                     // You could update UI elements here if needed
                 }, Qt::QueuedConnection);
@@ -411,4 +422,41 @@ void PlaybackWindow::onSegmentsReady(int cameraId, const SegmentList& segs) {
         // Optional: log errors
         connect(stitch_, &PlaybackStitchingPlayer::errorText, this,
                 [](const QString& e){ qWarning() << "[Stitch]" << e; }, Qt::QueuedConnection);
+        // Rewind/Forward ±10s using the timeline playhead (day offset)
+        connect(sideControls, &PlaybackSideControls::rewind10Clicked, this, [this](){
+            if (!stitch_) return;
+            //const qint64 dayNs = 24LL*3600LL*1000000000LL;
+            qint64 t = timelineView->playheadNs() - 10LL*1000000000LL;
+            if (t < 0) t = 0;
+            const qint64 wall = dayStartNs_ + t;
+            QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
+        });
+        connect(sideControls, &PlaybackSideControls::forward10Clicked, this, [this](){
+            if (!stitch_) return;
+            const qint64 dayNs = 24LL*3600LL*1000000000LL;
+            qint64 t = timelineView->playheadNs() + 10LL*1000000000LL;
+            if (t >= dayNs) t = dayNs - 1;
+            const qint64 wall = dayStartNs_ + t;
+            QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
+        });
+
+        // Speed cycle: 1x → 2x → 4x → 0.5x → (loops)
+        connect(sideControls, &PlaybackSideControls::speedCycleClicked, this, [this](){
+            if (!stitch_) return;
+            static const double rates[] = {1.0, 2.0, 4.0, 0.5};
+            static int idx = 0;
+            idx = (idx + 1) % int(sizeof(rates)/sizeof(rates[0]));
+            const double r = rates[idx];
+            QMetaObject::invokeMethod(stitch_, "setRate", Qt::QueuedConnection, Q_ARG(double, r));
+            sideControls->setSpeedLabel(QString("Speed %1x").arg(r, 0, 'g', 2));
+        });
+        connect(sideControls, &PlaybackSideControls::previousDayClicked, this, [this](){
+            const QDate base = currentDay_.isValid() ? currentDay_ : QDate::currentDate();
+            const QDate prev = base.addDays(-1);
+            if (lastCamName_.isEmpty()) {
+                qWarning() << "[PW] Prev day clicked but no camera selected yet";
+                return;
+            }
+            runGoFor(lastCamName_, prev);
+        });
     }

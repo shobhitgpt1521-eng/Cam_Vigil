@@ -58,6 +58,9 @@ private:
     qint64 dayStartNs_{0}, dayEndNs_{0};
     PlaybackSegmentIndex segIndex_;
     QDate currentDay_;
+    QString lastCamName_;   // remember last selected camera text
+    void runGoFor(const QString& camName, const QDate& day);
+
 private slots:
     void onCamerasReady(const CamList& cams);
     void onDaysReady(int cameraId, const QStringList& ymdList);

@@ -1,20 +1,29 @@
 #pragma once
 #include <QWidget>
+
 class QPushButton;
 
 class PlaybackSideControls : public QWidget {
     Q_OBJECT
 public:
     explicit PlaybackSideControls(QWidget* parent=nullptr);
-    QPushButton* playButton() const { return play_; }
-    QPushButton* pauseButton() const { return pause_; }
+
     void setEnabledControls(bool on);
+    void setSpeedLabel(const QString& s);  // already added earlier
 
 signals:
-     void playClicked();
+    void playClicked();
     void pauseClicked();
+    void rewind10Clicked();
+    void forward10Clicked();
+    void speedCycleClicked();
+    void previousDayClicked();
 
 private:
     QPushButton* play_{nullptr};
     QPushButton* pause_{nullptr};
+    QPushButton* rewind10_{nullptr};
+    QPushButton* forward10_{nullptr};
+    QPushButton* speed_{nullptr};
+    QPushButton* prevDay_{nullptr};
 };
