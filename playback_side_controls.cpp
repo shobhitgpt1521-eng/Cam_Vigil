@@ -34,11 +34,9 @@ PlaybackSideControls::PlaybackSideControls(QWidget* parent)
     lay->addStretch(1);
     lay->addWidget(play_,      0, Qt::AlignHCenter);
     lay->addWidget(pause_,     0, Qt::AlignHCenter);
-    lay->addSpacing(6);
     lay->addWidget(rewind10_,  0, Qt::AlignHCenter);
     lay->addWidget(forward10_, 0, Qt::AlignHCenter);
     lay->addWidget(speed_,     0, Qt::AlignHCenter);
-    lay->addSpacing(6);
     lay->addWidget(prevDay_,   0, Qt::AlignHCenter);
     lay->addStretch(1);
 

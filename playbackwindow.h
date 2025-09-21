@@ -5,6 +5,7 @@
 #include "playback_controls.h"
 #include "playback_timeline_controller.h"
 #include "playback_segment_index.h"
+#include "playback_trim_panel.h"
 class PlaybackTimelineView;
 class PlaybackTimelineModel;
 class QCloseEvent;
@@ -14,6 +15,7 @@ class PlaybackSideControls;
 class PlaybackVideoPlayerGst;
 class QThread;
 class PlaybackStitchingPlayer;
+class PlaybackExporter;
 class PlaybackWindow : public QWidget {
     Q_OBJECT
 public:
@@ -60,6 +62,18 @@ private:
     QDate currentDay_;
     QString lastCamName_;   // remember last selected camera text
     void runGoFor(const QString& camName, const QDate& day);
+
+    // --- Trim/Export UI state ---
+    struct TrimRange { bool enabled=false; qint64 start_ns=0; qint64 end_ns=0; };
+    TrimRange trim_;
+    PlaybackTrimPanel* trimPanel=nullptr;
+    void updateTrimClamps_();                    // stop playback at end when in trim mode
+    void applyTextEditsToSelection_(qint64 s, qint64 e);
+
+    void startExport_();
+        // Export infra
+    QThread* exportThread_{nullptr};
+    PlaybackExporter* exporter_{nullptr};
 
 private slots:
     void onCamerasReady(const CamList& cams);

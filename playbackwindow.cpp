@@ -1,5 +1,6 @@
-
-
+#include <QDir>
+#include <QProcess>
+#include "playback_exporter.h"
 #include "playbackwindow.h"
 #include <QDebug>
 #include <QMetaType>
@@ -63,6 +64,10 @@ PlaybackWindow::PlaybackWindow(QWidget* parent)
     timelineView = new PlaybackTimelineView(this);
     timelineView->setStyleSheet("background:#111;");
     root->addWidget(timelineView); // bottom bar
+    // --- New: compact Trim/Export panel (always visible, disabled until checkbox ON)
+    trimPanel = new PlaybackTrimPanel(this);
+    root->addWidget(trimPanel);
+    trimPanel->setEnabledPanel(false);
     setLayout(root);
     initPlayer_();
     initStitch_();
@@ -89,14 +94,66 @@ PlaybackWindow::PlaybackWindow(QWidget* parent)
         connect(timelineCtl, &PlaybackTimelineController::log, this,
                 [](const QString& s){ qInfo().noquote() << s; });
         // Timeline seek → stitching seek (wall clock)
-            connect(timelineView, &PlaybackTimelineView::seekRequested, this, [this](qint64 day_offset_ns){
-                if (!stitch_) return;
-                const qint64 wall = dayStartNs_ + day_offset_ns;
-                QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection,
-                                          Q_ARG(qint64, wall));
-            });
+        connect(timelineView, &PlaybackTimelineView::seekRequested, this, [this](qint64 day_offset_ns){
+             if (!stitch_) return;
+             qint64 t = day_offset_ns;
+             if (trim_.enabled) {
+                 t = qBound<qint64>(trim_.start_ns, t, trim_.end_ns - 1);
+                 // also pin playhead visually if user dragged outside
+                 timelineView->setPlayheadNs(t);
+             }
+             const qint64 wall = dayStartNs_ + t;
+             QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
+         });
 
             // Note: Side controls connections moved to initStitch_() to ensure proper timing
+            // ---------- Trim/Export wiring ----------
+                // Checkbox toggles trim mode
+                connect(trimPanel, &PlaybackTrimPanel::trimModeToggled, this, [this](bool on){
+                    trim_.enabled = on;
+                    const qint64 dayNs = 24LL*3600LL*1000000000LL;
+                    const qint64 ph = timelineView->playheadNs();
+                    qint64 s = qBound<qint64>(0, ph, dayNs - 2'000'000'000LL);
+                    qint64 e = qMin(s + 60LL*1000000000LL, dayNs - 1);
+                    trim_.start_ns = s; trim_.end_ns = e;
+
+                    timelineView->setSelection(trim_.start_ns, trim_.end_ns, on);
+                    trimPanel->setEnabledPanel(on);
+                    trimPanel->setDayStartNs(dayStartNs_);
+                    trimPanel->setRangeNs(trim_.start_ns, trim_.end_ns);
+                    // start playback cursor at the selection start for clarity
+                    if (timelineView) timelineView->setPlayheadNs(trim_.start_ns);
+                });
+
+                // Edits from panel → selection
+                connect(trimPanel, &PlaybackTrimPanel::startEditedNs, this, [this](qint64 s){
+                    if (!trim_.enabled) return;
+                    s = qBound<qint64>(0, s, trim_.end_ns - 1);
+                    trim_.start_ns = s;
+                    timelineView->setSelection(trim_.start_ns, trim_.end_ns, true);
+                    trimPanel->setDurationLabel(trim_.end_ns - trim_.start_ns);
+                });
+                connect(trimPanel, &PlaybackTrimPanel::endEditedNs, this, [this](qint64 e){
+                    if (!trim_.enabled) return;
+                    const qint64 dayNs = 24LL*3600LL*1000000000LL;
+                    e = qBound<qint64>(trim_.start_ns + 1, e, dayNs - 1);
+                    trim_.end_ns = e;
+                    timelineView->setSelection(trim_.start_ns, trim_.end_ns, true);
+                    trimPanel->setDurationLabel(trim_.end_ns - trim_.start_ns);
+                });
+
+                // Dragging on timeline → panel
+                connect(timelineView, &PlaybackTimelineView::selectionChanged, this, [this](qint64 s, qint64 e){
+                    if (!trim_.enabled) return;
+                    trim_.start_ns = s; trim_.end_ns = e;
+                    trimPanel->setRangeNs(s, e);
+                });
+
+                // Export request stub (wire worker later)
+                connect(trimPanel, &PlaybackTrimPanel::exportRequested, this, [this](){
+                     if (!trim_.enabled || !db || selectedCamId<=0) return;
+                     startExport_();
+                 });
 }
 void PlaybackWindow::stopPlayer_() {
     if (!playerThread_) return;
@@ -149,6 +206,14 @@ PlaybackWindow::~PlaybackWindow() {
     // Ensure background threads are down even if window is destroyed externally
     stopStitch_();
     stopPlayer_();
+    if (exportThread_ && exporter_) {
+        QMetaObject::invokeMethod(exporter_, "cancel", Qt::QueuedConnection);
+        exportThread_->quit();
+        if (!exportThread_->wait(2000)) { exportThread_->terminate(); exportThread_->wait(); }
+        exportThread_->deleteLater();
+        exportThread_ = nullptr;
+        exporter_ = nullptr;
+    }
 }
 
 void PlaybackWindow::closeEvent(QCloseEvent* e) {
@@ -159,6 +224,14 @@ void PlaybackWindow::closeEvent(QCloseEvent* e) {
     stopStitch_();
     stopPlayer_();
     e->accept();
+    if (exportThread_ && exporter_) {
+        QMetaObject::invokeMethod(exporter_, "cancel", Qt::QueuedConnection);
+        exportThread_->quit();
+        if (!exportThread_->wait(2000)) { exportThread_->terminate(); exportThread_->wait(); }
+        exportThread_->deleteLater();
+        exportThread_ = nullptr;
+        exporter_ = nullptr;
+    }
 }
 void PlaybackWindow::openDb(const QString& dbPath) {
     qInfo() << "[PW] openDb(" << dbPath << ") tid=" << tid();
@@ -317,6 +390,19 @@ void PlaybackWindow::onSegmentsReady(int cameraId, const SegmentList& segs) {
     qInfo() << "[PW] sideControls=" << sideControls << " enable=" << !metas.isEmpty()
                 << " metas=" << metas.size();
         if (sideControls) sideControls->setEnabledControls(!metas.isEmpty());
+        // Update trim panel’s notion of the day start and clamp selection to new day
+        if (trimPanel) trimPanel->setDayStartNs(dayStartNs_);
+                if (trim_.enabled) {
+                    const qint64 dayNs = 24LL*3600LL*1000000000LL;
+                    trim_.start_ns = qBound<qint64>(0, trim_.start_ns, dayNs - 2'000'000'000LL);
+                    trim_.end_ns   = qBound<qint64>(trim_.start_ns + 1, trim_.end_ns, dayNs - 1);
+                    if (timelineView) {
+                        timelineView->setSelection(trim_.start_ns, trim_.end_ns, true);
+                    }
+                    if (trimPanel) {
+                        trimPanel->setRangeNs(trim_.start_ns, trim_.end_ns);
+                    }
+                }
 }
 void PlaybackWindow::runGoFor(const QString& camName, const QDate& day) {
     if (!timelineCtl) return;
@@ -383,18 +469,27 @@ void PlaybackWindow::runGoFor(const QString& camName, const QDate& day) {
         // Stitching → playhead
         connect(stitch_, &PlaybackStitchingPlayer::wallPositionNs, this,
                 [this](qint64 wall_offset_ns){
-                    timelineView->setPlayheadNs(wall_offset_ns);
+            if (timelineView) {
+            timelineView->setPlayheadNs(wall_offset_ns);
+            }
+                    if (stitch_) updateTrimClamps_();
                 }, Qt::QueuedConnection);
 
         // Side controls → Stitcher (queued across threads, type-safe)
         // Moved here to ensure stitch_ is properly initialized
-        connect(sideControls, &PlaybackSideControls::playClicked, this,
-                [this](){
+        connect(sideControls, &PlaybackSideControls::playClicked, this, [this](){
                     qInfo() << "[PW] Play button clicked";
                     if (!stitch_) {
                         qWarning() << "[PW] Stitching player not available";
                         return;
                     }
+                    qint64 t = timelineView ? timelineView->playheadNs() : 0;
+                    if (trim_.enabled) {
+                    // If cursor outside, start from selection start
+                    if (t < trim_.start_ns || t >= trim_.end_ns) t = trim_.start_ns;
+                    }
+                    const qint64 wall = dayStartNs_ + t;
+                    QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
                     QMetaObject::invokeMethod(stitch_, "play", Qt::QueuedConnection);
                 });
         connect(sideControls, &PlaybackSideControls::pauseClicked, this,
@@ -426,16 +521,18 @@ void PlaybackWindow::runGoFor(const QString& camName, const QDate& day) {
         connect(sideControls, &PlaybackSideControls::rewind10Clicked, this, [this](){
             if (!stitch_) return;
             //const qint64 dayNs = 24LL*3600LL*1000000000LL;
-            qint64 t = timelineView->playheadNs() - 10LL*1000000000LL;
-            if (t < 0) t = 0;
+            qint64 t = timelineView ? timelineView->playheadNs() - 10LL*1000000000LL : 0;
+            t = qMax<qint64>(0, t);
+            if (trim_.enabled) t = qMax<qint64>(trim_.start_ns, t);
             const qint64 wall = dayStartNs_ + t;
             QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
         });
         connect(sideControls, &PlaybackSideControls::forward10Clicked, this, [this](){
             if (!stitch_) return;
             const qint64 dayNs = 24LL*3600LL*1000000000LL;
-            qint64 t = timelineView->playheadNs() + 10LL*1000000000LL;
-            if (t >= dayNs) t = dayNs - 1;
+            qint64 t = timelineView ? timelineView->playheadNs() + 10LL*1000000000LL : 0;
+            t = qMin<qint64>(dayNs - 1, t);
+            if (trim_.enabled) t = qMin<qint64>(trim_.end_ns - 1, t);
             const qint64 wall = dayStartNs_ + t;
             QMetaObject::invokeMethod(stitch_, "seekWall", Qt::QueuedConnection, Q_ARG(qint64, wall));
         });
@@ -460,3 +557,78 @@ void PlaybackWindow::runGoFor(const QString& camName, const QDate& day) {
             runGoFor(lastCamName_, prev);
         });
     }
+    // ---------- helpers ----------
+    void PlaybackWindow::updateTrimClamps_(){
+        if (!trim_.enabled || !timelineView || !stitch_) return;
+        const qint64 ph = timelineView->playheadNs();
+        if (ph >= trim_.end_ns) {
+            QMetaObject::invokeMethod(stitch_, "pause", Qt::QueuedConnection);
+            timelineView->setPlayheadNs(trim_.end_ns);
+        }
+    }
+
+
+    void PlaybackWindow::applyTextEditsToSelection_(qint64 s, qint64 e){
+        if (!trim_.enabled) return;
+        trim_.start_ns = s; trim_.end_ns = e;
+        if (timelineView) timelineView->setSelection(trim_.start_ns, trim_.end_ns, true);
+        if (trimPanel)    trimPanel->setRangeNs(trim_.start_ns, trim_.end_ns);
+        if (trimPanel)    trimPanel->setDurationLabel(trim_.end_ns - trim_.start_ns);
+    }
+    void PlaybackWindow::startExport_() {
+        if (exportThread_) {
+            qWarning() << "[Export] already running";
+            return;
+        }
+        if (segIndex_.playlist().isEmpty()) {
+            qWarning() << "[Export] empty playlist";
+            return;
+        }
+        exportThread_ = new QThread(this);
+        exporter_ = new PlaybackExporter();
+        exporter_->moveToThread(exportThread_);
+        connect(exportThread_, &QThread::finished, exporter_, &QObject::deleteLater);
+
+        // configure
+        ExportOptions opt;
+        opt.outDir   = QDir::home().filePath("CamVigilExports");
+        opt.baseName = currentDay_.isValid() ? currentDay_.toString("yyyy-MM-dd")
+                                             : QDate::currentDate().toString("yyyy-MM-dd");
+        opt.precise  = false;    // set true if you want frame-accurate re-encode
+        opt.copyAudio= true;
+
+        exporter_->setPlaylist(segIndex_.playlist(), dayStartNs_);
+        exporter_->setSelection(trim_.start_ns, trim_.end_ns);
+        exporter_->setOptions(opt);
+
+        // logs/progress
+        connect(exporter_, &PlaybackExporter::log, this,
+                [](const QString& s){ qInfo().noquote() << s; });
+        connect(exporter_, &PlaybackExporter::progress, this,
+                [](double p){ qInfo() << "[Export] progress" << p; });
+
+        auto cleanup = [this](){
+            if (!exportThread_) return;
+            exportThread_->quit();
+            if (!exportThread_->wait(3000)) {
+                exportThread_->terminate();
+                exportThread_->wait();
+            }
+            exportThread_->deleteLater();
+            exportThread_ = nullptr;
+            exporter_ = nullptr;
+        };
+
+        connect(exporter_, &PlaybackExporter::finished, this, [cleanup](const QString& out){
+            qInfo() << "[Export] done ->" << out;
+            cleanup();
+        });
+        connect(exporter_, &PlaybackExporter::error, this, [cleanup](const QString& e){
+            qWarning() << "[Export] error:" << e;
+            cleanup();
+        });
+
+        exportThread_->start();
+        QMetaObject::invokeMethod(exporter_, "start", Qt::QueuedConnection);
+    }
+

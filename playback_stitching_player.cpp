@@ -128,6 +128,11 @@ OPEN:
     if (idx != curIdx_) openIndex(idx);
     playerSeek(inSeg);
     playerPlay();
+    // reflect actual playing state so Pause works immediately after a drag seek
+    if (!isPlaying_) {
+    isPlaying_ = true;
+    emit stateChanged(true);
+    }
 }
 
 void PlaybackStitchingPlayer::onPlayerEos() {

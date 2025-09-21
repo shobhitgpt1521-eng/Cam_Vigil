@@ -41,6 +41,7 @@ SOURCES += \
     operationstatuswidget.cpp \
     playback_controls.cpp \
     playback_db_service.cpp \
+    playback_exporter.cpp \
     playback_segment_index.cpp \
     playback_side_controls.cpp \
     playback_stitching_player.cpp \
@@ -48,6 +49,7 @@ SOURCES += \
     playback_timeline_model.cpp \
     playback_timeline_view.cpp \
     playback_title_bar.cpp \
+    playback_trim_panel.cpp \
     playback_video_box.cpp \
     playback_video_player_gst.cpp \
     playbackwindow.cpp \
@@ -79,6 +81,7 @@ HEADERS += \
     operationstatuswidget.h \
     playback_controls.h \
     playback_db_service.h \
+    playback_exporter.h \
     playback_segment_index.h \
     playback_side_controls.h \
     playback_stitching_player.h \
@@ -86,6 +89,7 @@ HEADERS += \
     playback_timeline_model.h \
     playback_timeline_view.h \
     playback_title_bar.h \
+    playback_trim_panel.h \
     playback_video_box.h \
     playback_video_player_gst.h \
     playbackwindow.h \
