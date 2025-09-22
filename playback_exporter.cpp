@@ -119,33 +119,41 @@ bool PlaybackExporter::cutParts_(const QVector<ClipPart>& parts, QStringList* cu
         const QString cut = QString("%1/part_%2.mkv").arg(QDir::tempPath()).arg(i,4,10,QChar('0'));
         cutPaths->push_back(cut);
 
-        QStringList args;
-        // -ss/-to before -i for fast keyframe seek
-        args << "-hide_banner" << "-y"
-             << "-ss" << QString::number(ss, 'f', 6)
-             << "-to" << QString::number(to, 'f', 6)
-             << "-i" << part.path;
+        QStringList args; args << "-hide_banner" << "-y";
 
         if (opts_.precise) {
-            args << "-c:v" << opts_.vcodec
+            const double coarse = std::max(0.0, ss - 3.0); // jump ~3s earlier to reduce decode cost
+            args << "-ss" << QString::number(coarse, 'f', 3)      // coarse input seek
+                 << "-i"  << part.path
+                 << "-ss" << QString::number(ss - coarse, 'f', 6) // fine output seek
+                 << "-to" << QString::number(to - coarse, 'f', 6)
+                 << "-c:v" << opts_.vcodec
                  << "-preset" << opts_.preset
-                 << "-crf" << QString::number(opts_.crf);
+                 << "-crf" << QString::number(opts_.crf)
+                 << "-pix_fmt" << "yuv420p"
+                 << "-fflags" << "+genpts"
+                 << "-reset_timestamps" << "1";
             if (opts_.copyAudio) args << "-c:a" << "copy";
+            else                 args << "-c:a" << "aac" << "-b:a" << "128k";
+            args << "-movflags" << "+faststart"
+                 << cut;
         } else {
-            args << "-c" << "copy";
+            args << "-ss" << QString::number(ss, 'f', 6)
+                 << "-to" << QString::number(to, 'f', 6)
+                 << "-i"  << part.path
+                 << "-c"  << "copy"
+                 << "-avoid_negative_ts" << "make_zero"
+                 << cut;
         }
-        args << "-avoid_negative_ts" << "make_zero" << cut;
 
         QByteArray err;
         emit log(QString("[Export] cut %1/%2").arg(i+1).arg(N));
-        if (!runFfmpeg_(args, &err)) {
-            emit log(QString::fromUtf8(err));
-            return false;
-        }
-        emit progress( (i+1) * 100.0 / (N+1) ); // reserve last chunk for concat
+        if (!runFfmpeg_(args, &err)) { emit log(QString::fromUtf8(err)); return false; }
+        emit progress( (i+1) * 100.0 / (N+1) );
     }
     return true;
 }
+
 
 bool PlaybackExporter::writeConcatList_(const QStringList& cutPaths, QString* listPath){
     const QString p = QDir::temp().absoluteFilePath("concat_inputs.txt");
